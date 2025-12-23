@@ -323,7 +323,7 @@ async function checkForNewBuys(): Promise<void> {
 async function sendStartupMessage(): Promise<void> {
   const embed: DiscordEmbed = {
     description: [
-      '🐍 **Snek Cash Buy Bot Started!**',
+      '**Snek Cash Buy Bot Started!**',
       '',
       'Now monitoring for $SCH buys:',
       '• ADA → SCH swaps',
@@ -344,7 +344,7 @@ async function sendStartupMessage(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log('🐍 Starting Snek Cash Buy Bot...');
+  console.log('Starting Snek Cash Buy Bot...');
   console.log(`Config:
   - DexHunter API: ${CONFIG.DEXHUNTER_API_URL}
   - SCH Token: ${CONFIG.SCH_TOKEN_ID}
