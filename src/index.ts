@@ -53,6 +53,11 @@ interface DexHunterOrder {
   amount_token_out?: number;
   lovelace_in?: number;
   lovelace_out?: number;
+  // Completion/update transaction hash (the actual swap transaction)
+  update_tx_hash?: string;
+  // Token symbols
+  token_in_symbol?: string;
+  token_out_symbol?: string;
 }
 
 interface OrdersResponse {
@@ -174,29 +179,26 @@ async function createBuyEmbed(
   // Debug log to see actual order structure
   console.log('Order data:', JSON.stringify(order, null, 2));
   
-  // Try multiple possible field names for amounts based on DexHunter API
-  // The API may use total_input/total_output from swap responses
-  const rawAmountIn = order.amount_in || order.input_amount || order.total_input || order.amount_token_in || order.lovelace_in || 0;
-  const rawAmountOut = order.actual_out_amount || order.expected_out_amount || order.output_amount || order.total_output || order.amount_token_out || 0;
+  // Get the completion transaction hash (update_tx_hash) - this is the actual swap transaction
+  // tx_hash is just the submission transaction, update_tx_hash is where the swap happens
+  const completionTxHash = order.update_tx_hash || order.tx_hash;
   
-  console.log(`Raw amounts - In: ${rawAmountIn}, Out: ${rawAmountOut}, Pair: ${pairType}`);
+  console.log(`Transaction hashes - Submission: ${order.tx_hash}, Completion: ${order.update_tx_hash}, Using: ${completionTxHash}`);
   
-  // Calculate amounts based on pair type
-  let amountSpent: number;
-  let spentLabel: string;
+  // DexHunter API returns amounts already in token units (not raw lovelace/smallest unit)
+  // amount_in is in ADA/NIGHT, actual_out_amount is in SCH tokens
+  const rawAmountIn = order.amount_in || order.input_amount || 0;
+  const rawAmountOut = order.actual_out_amount || order.expected_out_amount || 0;
   
-  if (pairType === 'ADA') {
-    amountSpent = rawAmountIn / Math.pow(10, CONFIG.ADA_DECIMALS);
-    spentLabel = 'ADA Amount';
-  } else {
-    // For NIGHT buys, convert NIGHT to ADA equivalent for display
-    const nightAmount = rawAmountIn / Math.pow(10, CONFIG.NIGHT_DECIMALS);
-    // Show NIGHT amount but also calculate ADA equivalent if needed
-    amountSpent = nightAmount;
-    spentLabel = 'NIGHT Amount';
-  }
+  console.log(`Amounts - In: ${rawAmountIn} ${pairType}, Out: ${rawAmountOut} SCH`);
   
-  const schReceived = rawAmountOut / Math.pow(10, CONFIG.SCH_DECIMALS);
+  // DexHunter API returns amounts already in token units (ADA, not lovelace; SCH tokens not raw)
+  // So we use the values directly without decimal conversion
+  let amountSpent: number = rawAmountIn;
+  let spentLabel: string = pairType === 'ADA' ? 'ADA Amount' : 'NIGHT Amount';
+  
+  // SCH received is also already in token units
+  const schReceived = rawAmountOut;
   
   // If amounts are still 0, try to estimate from SCH received and price
   let displayAmount = amountSpent;
@@ -222,7 +224,7 @@ async function createBuyEmbed(
     `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
     `**Market Cap:** ${marketCapAda > 0 ? formatNumberWithCommas(Math.round(marketCapAda)) : 'N/A'} ₳`,
     ``,
-    `[🔍 View TX](https://cardanoscan.io/transaction/${order.tx_hash})`,
+    `[🔍 View TX](https://cardanoscan.io/transaction/${completionTxHash})`,
   ];
   
   const embed: DiscordEmbed = {
