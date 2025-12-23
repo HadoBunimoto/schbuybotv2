@@ -41,6 +41,11 @@ interface DexHunterOrder {
   token_id_out: string;
   sender_address?: string;
   dex_name?: string;
+  // Additional fields that might be in the response
+  input_amount?: number;
+  output_amount?: number;
+  token_in?: string;
+  token_out?: string;
 }
 
 interface OrdersResponse {
@@ -159,39 +164,35 @@ async function createBuyEmbed(
   adaPrice: number,
   schPriceInAda: number
 ): Promise<DiscordEmbed> {
+  // Debug log to see actual order structure
+  console.log('Order data:', JSON.stringify(order, null, 2));
+  
+  // Try multiple possible field names for amounts
+  const rawAmountIn = order.amount_in || order.input_amount || 0;
+  const rawAmountOut = order.actual_out_amount || order.expected_out_amount || order.output_amount || 0;
+  
   const amountIn = pairType === 'ADA' 
-    ? order.amount_in / Math.pow(10, CONFIG.ADA_DECIMALS)
-    : order.amount_in / Math.pow(10, CONFIG.NIGHT_DECIMALS);
+    ? rawAmountIn / Math.pow(10, CONFIG.ADA_DECIMALS)
+    : rawAmountIn / Math.pow(10, CONFIG.NIGHT_DECIMALS);
   
-  const schReceived = (order.actual_out_amount || order.expected_out_amount) / Math.pow(10, CONFIG.SCH_DECIMALS);
+  const schReceived = rawAmountOut / Math.pow(10, CONFIG.SCH_DECIMALS);
   
-  // Calculate USD values
-  const spentUsd = pairType === 'ADA' 
-    ? amountIn * adaPrice
-    : amountIn * (await getTokenPriceInAda(CONFIG.NIGHT_TOKEN_ID)) * adaPrice;
+  // Calculate market cap (SCH supply * price in ADA)
+  const SCH_SUPPLY = 1_000_000_000; // 1 billion SCH
+  const marketCapAda = SCH_SUPPLY * schPriceInAda;
   
-  // Green color matching the screenshot
-  const color = 0x2ecc71;
+  // Cyan-green color matching the logo
+  const color = 0x3EEBBE;
   
-  // Build description with all the info (matching screenshot layout)
+  // Build description matching the exact screenshot layout
   const descriptionLines = [
-    `**💵 Spent:** ${formatNumber(amountIn, 2)} ${pairType} ($${formatNumber(spentUsd, 2)} USD)`,
-    `**🪙 Received:** ${formatNumberWithCommas(schReceived)} $SCH`,
-    `**📊 Price:** ${schPriceInAda.toFixed(6)} ADA ($${(schPriceInAda * adaPrice).toFixed(6)})`,
+    `**ADA Amount:** ${amountIn.toFixed(2)} ₳`,
+    `**Snek Cash Amount:** ${formatNumberWithCommas(schReceived)} $SCH`,
+    `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
+    `**Market Cap:** ${marketCapAda > 0 ? formatNumberWithCommas(Math.round(marketCapAda)) : 'N/A'} ₳`,
+    ``,
+    `[🔍 View TX](https://cardanoscan.io/transaction/${order.tx_hash})`,
   ];
-  
-  // Add DEX if available
-  if (order.dex_name) {
-    descriptionLines.push(`**🏦 DEX:** ${order.dex_name}`);
-  }
-  
-  // Add transaction link
-  descriptionLines.push(`**🔗 Transaction:** [View on CardanoScan](https://cardanoscan.io/transaction/${order.tx_hash})`);
-  
-  // Add buyer if available
-  if (order.sender_address) {
-    descriptionLines.push(`**👤 Buyer:** \`${truncateAddress(order.sender_address)}\``);
-  }
   
   const embed: DiscordEmbed = {
     color: color,
@@ -234,15 +235,15 @@ async function checkForNewBuys(): Promise<void> {
     
     console.log(`Found ${adaBuys.length} ADA buys, ${nightBuys.length} NIGHT buys`);
     
+    // Collect all new orders to process (avoid duplicates)
+    const newOrders: { order: DexHunterOrder; pairType: 'ADA' | 'NIGHT' }[] = [];
+    
     // Process ADA buys
     for (const order of adaBuys) {
       if (!seenTransactions.has(order.tx_hash)) {
         seenTransactions.add(order.tx_hash);
-        
         if (!isFirstRun) {
-          console.log(`🆕 New ADA buy: ${order.tx_hash}`);
-          const embed = await createBuyEmbed(order, 'ADA', adaPrice, schPriceInAda);
-          await sendDiscordNotification(embed);
+          newOrders.push({ order, pairType: 'ADA' });
         }
       }
     }
@@ -251,13 +252,19 @@ async function checkForNewBuys(): Promise<void> {
     for (const order of nightBuys) {
       if (!seenTransactions.has(order.tx_hash)) {
         seenTransactions.add(order.tx_hash);
-        
         if (!isFirstRun) {
-          console.log(`🆕 New NIGHT buy: ${order.tx_hash}`);
-          const embed = await createBuyEmbed(order, 'NIGHT', adaPrice, schPriceInAda);
-          await sendDiscordNotification(embed);
+          newOrders.push({ order, pairType: 'NIGHT' });
         }
       }
+    }
+    
+    // Send notifications for new orders (one at a time to avoid duplicates)
+    for (const { order, pairType } of newOrders) {
+      console.log(`🆕 New ${pairType} buy: ${order.tx_hash}`);
+      const embed = await createBuyEmbed(order, pairType, adaPrice, schPriceInAda);
+      await sendDiscordNotification(embed);
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     // After first run, we'll start notifying
@@ -293,7 +300,7 @@ async function sendStartupMessage(): Promise<void> {
       '',
       `Poll Interval: ${CONFIG.POLL_INTERVAL / 1000} seconds`,
     ].join('\n'),
-    color: 0x2ecc71,
+    color: 0x3EEBBE,
     image: {
       url: 'https://raw.githubusercontent.com/HadoBunimoto/schbuybotv2/main/banner.png',
     },
