@@ -165,26 +165,37 @@ async function createBuyEmbed(
   
   const schReceived = (order.actual_out_amount || order.expected_out_amount) / Math.pow(10, CONFIG.SCH_DECIMALS);
   
-  // Calculate market cap (SCH supply * price in ADA)
-  const SCH_SUPPLY = 1_000_000_000; // 1 billion SCH
-  const marketCapAda = SCH_SUPPLY * schPriceInAda;
+  // Calculate USD values
+  const spentUsd = pairType === 'ADA' 
+    ? amountIn * adaPrice
+    : amountIn * (await getTokenPriceInAda(CONFIG.NIGHT_TOKEN_ID)) * adaPrice;
   
   // Green color matching the screenshot
   const color = 0x2ecc71;
   
   // Build description with all the info (matching screenshot layout)
-  const description = [
-    `**ADA Amount:** ${formatNumber(amountIn, 2)} ₳`,
-    `**Snek Cash Amount:** ${formatNumber(schReceived, 0)} $SCH`,
-    `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
-    `**Market Cap:** ${marketCapAda > 0 ? formatNumber(marketCapAda, 2) : 'N/A'} ₳`,
-    ``,
-    `[🔍 View TX](https://cardanoscan.io/transaction/${order.tx_hash})`,
-  ].join('\n');
+  const descriptionLines = [
+    `**💵 Spent:** ${formatNumber(amountIn, 2)} ${pairType} ($${formatNumber(spentUsd, 2)} USD)`,
+    `**🪙 Received:** ${formatNumberWithCommas(schReceived)} $SCH`,
+    `**📊 Price:** ${schPriceInAda.toFixed(6)} ADA ($${(schPriceInAda * adaPrice).toFixed(6)})`,
+  ];
+  
+  // Add DEX if available
+  if (order.dex_name) {
+    descriptionLines.push(`**🏦 DEX:** ${order.dex_name}`);
+  }
+  
+  // Add transaction link
+  descriptionLines.push(`**🔗 Transaction:** [View on CardanoScan](https://cardanoscan.io/transaction/${order.tx_hash})`);
+  
+  // Add buyer if available
+  if (order.sender_address) {
+    descriptionLines.push(`**👤 Buyer:** \`${truncateAddress(order.sender_address)}\``);
+  }
   
   const embed: DiscordEmbed = {
     color: color,
-    description: description,
+    description: descriptionLines.join('\n'),
     image: {
       url: 'https://raw.githubusercontent.com/HadoBunimoto/schbuybotv2/main/banner.png',
     },
@@ -194,6 +205,10 @@ async function createBuyEmbed(
   };
   
   return embed;
+}
+
+function formatNumberWithCommas(num: number): string {
+  return Math.round(num).toLocaleString('en-US');
 }
 
 // ============================================
