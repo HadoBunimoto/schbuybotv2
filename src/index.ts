@@ -53,11 +53,12 @@ interface TokenPrice {
 }
 
 interface DiscordEmbed {
-  title: string;
+  title?: string;
   description?: string;
   color: number;
-  fields: { name: string; value: string; inline?: boolean }[];
+  fields?: { name: string; value: string; inline?: boolean }[];
   thumbnail?: { url: string };
+  image?: { url: string };
   footer?: { text: string; icon_url?: string };
   timestamp?: string;
 }
@@ -164,74 +165,33 @@ async function createBuyEmbed(
   
   const schReceived = (order.actual_out_amount || order.expected_out_amount) / Math.pow(10, CONFIG.SCH_DECIMALS);
   
-  // Calculate USD values
-  const spentUsd = pairType === 'ADA' 
-    ? amountIn * adaPrice
-    : amountIn * (await getTokenPriceInAda(CONFIG.NIGHT_TOKEN_ID)) * adaPrice;
+  // Calculate market cap (SCH supply * price in ADA)
+  const SCH_SUPPLY = 1_000_000_000; // 1 billion SCH
+  const marketCapAda = SCH_SUPPLY * schPriceInAda;
   
-  const schValueUsd = schReceived * schPriceInAda * adaPrice;
+  // Green color matching the screenshot
+  const color = 0x2ecc71;
   
-  // Color based on buy size (green shades)
-  let color = 0x00ff00; // Bright green for big buys
-  if (spentUsd < 10) color = 0x90EE90; // Light green for small buys
-  else if (spentUsd < 50) color = 0x32CD32; // Lime green for medium buys
-  else if (spentUsd < 100) color = 0x228B22; // Forest green
-  
-  const emoji = spentUsd >= 100 ? '🐍🚀' : spentUsd >= 50 ? '🐍💰' : '🐍';
+  // Build description with all the info (matching screenshot layout)
+  const description = [
+    `**ADA Amount:** ${formatNumber(amountIn, 2)} ₳`,
+    `**Snek Cash Amount:** ${formatNumber(schReceived, 0)} $SCH`,
+    `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
+    `**Market Cap:** ${marketCapAda > 0 ? formatNumber(marketCapAda, 2) : 'N/A'} ₳`,
+    ``,
+    `[🔍 View TX](https://cardanoscan.io/transaction/${order.tx_hash})`,
+  ].join('\n');
   
   const embed: DiscordEmbed = {
-    title: `${emoji} New $SCH Buy!`,
     color: color,
-    fields: [
-      {
-        name: '💵 Spent',
-        value: `**${formatNumber(amountIn, 2)} ${pairType}**\n($${formatNumber(spentUsd, 2)} USD)`,
-        inline: true,
-      },
-      {
-        name: '🪙 Received',
-        value: `**${formatNumber(schReceived, 0)} $SCH**`,
-        inline: true,
-      },
-      {
-        name: '📊 Price',
-        value: `${(schPriceInAda * 1000000).toFixed(2)} lovelace\n($${(schPriceInAda * adaPrice).toFixed(6)} USD)`,
-        inline: true,
-      },
-    ],
-    thumbnail: {
-      url: 'https://raw.githubusercontent.com/ADAcash/cardano-token-registry/main/Snek%20Cash.png',
+    description: description,
+    image: {
+      url: 'https://raw.githubusercontent.com/HadoBunimoto/schbuybotv2/main/banner.png',
     },
     footer: {
-      text: `Snek Cash Buy Bot • ${order.dex_name || 'DexHunter'}`,
+      text: 'Powered by scream2',
     },
-    timestamp: order.completion_time || order.submission_time || new Date().toISOString(),
   };
-  
-  // Add DEX info if available
-  if (order.dex_name) {
-    embed.fields.push({
-      name: '🏦 DEX',
-      value: order.dex_name,
-      inline: true,
-    });
-  }
-  
-  // Add transaction link
-  embed.fields.push({
-    name: '🔗 Transaction',
-    value: `[View on CardanoScan](https://cardanoscan.io/transaction/${order.tx_hash})`,
-    inline: true,
-  });
-  
-  // Add buyer address if available
-  if (order.sender_address) {
-    embed.fields.push({
-      name: '👤 Buyer',
-      value: `\`${truncateAddress(order.sender_address)}\``,
-      inline: true,
-    });
-  }
   
   return embed;
 }
@@ -309,25 +269,22 @@ async function checkForNewBuys(): Promise<void> {
 // ============================================
 async function sendStartupMessage(): Promise<void> {
   const embed: DiscordEmbed = {
-    title: '🐍 Snek Cash Buy Bot Started!',
-    description: 'Now monitoring for $SCH buys on DexHunter.',
-    color: 0x00ff00,
-    fields: [
-      {
-        name: '📡 Monitoring',
-        value: '• ADA → SCH swaps\n• NIGHT → SCH swaps',
-        inline: true,
-      },
-      {
-        name: '⏱️ Poll Interval',
-        value: `${CONFIG.POLL_INTERVAL / 1000} seconds`,
-        inline: true,
-      },
-    ],
-    footer: {
-      text: 'Powered by DexHunter API',
+    description: [
+      '🐍 **Snek Cash Buy Bot Started!**',
+      '',
+      'Now monitoring for $SCH buys:',
+      '• ADA → SCH swaps',
+      '• NIGHT → SCH swaps',
+      '',
+      `Poll Interval: ${CONFIG.POLL_INTERVAL / 1000} seconds`,
+    ].join('\n'),
+    color: 0x2ecc71,
+    image: {
+      url: 'https://raw.githubusercontent.com/HadoBunimoto/schbuybotv2/main/banner.png',
     },
-    timestamp: new Date().toISOString(),
+    footer: {
+      text: 'Powered by scream2',
+    },
   };
   
   await sendDiscordNotification(embed);
