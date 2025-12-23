@@ -195,7 +195,6 @@ async function createBuyEmbed(
   // DexHunter API returns amounts already in token units (ADA, not lovelace; SCH tokens not raw)
   // So we use the values directly without decimal conversion
   let amountSpent: number = rawAmountIn;
-  let spentLabel: string = pairType === 'ADA' ? 'ADA Amount' : 'NIGHT Amount';
   
   // SCH received is also already in token units
   const schReceived = rawAmountOut;
@@ -205,27 +204,50 @@ async function createBuyEmbed(
   if (displayAmount === 0 && schReceived > 0 && schPriceInAda > 0) {
     // Estimate ADA spent based on SCH received and price
     displayAmount = schReceived * schPriceInAda;
-    spentLabel = 'ADA Amount (est.)';
   }
   
-  // Calculate market cap (SCH supply * price in ADA)
-  const SCH_SUPPLY = 1_000_000_000; // 1 billion SCH
-  const marketCapAda = SCH_SUPPLY * schPriceInAda;
+  // SCH supply for market cap calculations
+  const SCH_SUPPLY = 960_000_000; // 960 million SCH (for Night market cap calculation)
+  const SCH_SUPPLY_ADA = 1_000_000_000; // 1 billion SCH (for ADA market cap)
   
   // Cyan-green color matching the logo
   const color = 0x3EEBBE;
   
-  // Build description with bold title at top
-  const descriptionLines = [
-    `**New Snek Cash Buy Detected**`,
-    ``,
-    `**${spentLabel}:** ${displayAmount.toFixed(2)} ₳`,
-    `**Snek Cash Amount:** ${formatNumberWithCommas(schReceived)} $SCH`,
-    `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
-    `**Market Cap:** ${marketCapAda > 0 ? formatNumberWithCommas(Math.round(marketCapAda)) : 'N/A'} ₳`,
-    ``,
-    `[🔍 View TX](https://cardanoscan.io/transaction/${completionTxHash})`,
-  ];
+  // Build description based on pair type
+  let descriptionLines: string[];
+  
+  if (pairType === 'ADA') {
+    // ADA buy - use ADA symbol and ADA-based calculations
+    const marketCapAda = SCH_SUPPLY_ADA * schPriceInAda;
+    
+    descriptionLines = [
+      `**New Snek Cash Buy Detected**`,
+      ``,
+      `**ADA Amount:** ${formatNumberWithCommas(Math.round(displayAmount))} ₳`,
+      `**Snek Cash Amount:** ${formatNumberWithCommas(Math.round(schReceived))} $SCH`,
+      `**Token Price (ADA):** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
+      `**ADA Market Cap:** ${marketCapAda > 0 ? formatNumberWithCommas(Math.round(marketCapAda)) : 'N/A'} ₳`,
+      ``,
+      `[🔍 View TX](https://cardanoscan.io/transaction/${completionTxHash})`,
+    ];
+  } else {
+    // NIGHT buy - use $NIGHT and manually calculate Night-based price/market cap
+    // Token Price (Night) = Night amount spent / SCH received
+    const tokenPriceInNight = schReceived > 0 ? displayAmount / schReceived : 0;
+    // Night Market Cap = Night token price * SCH supply (960,000,000)
+    const marketCapNight = tokenPriceInNight * SCH_SUPPLY;
+    
+    descriptionLines = [
+      `**New Snek Cash Buy Detected**`,
+      ``,
+      `**Night Amount:** ${formatNumberWithCommas(Math.round(displayAmount))} $NIGHT`,
+      `**Snek Cash Amount:** ${formatNumberWithCommas(Math.round(schReceived))} $SCH`,
+      `**Token Price (Night):** ${tokenPriceInNight > 0 ? tokenPriceInNight.toFixed(8) : 'N/A'} $NIGHT`,
+      `**Night Market Cap:** ${marketCapNight > 0 ? formatNumberWithCommas(Math.round(marketCapNight)) : 'N/A'} $NIGHT`,
+      ``,
+      `[🔍 View TX](https://cardanoscan.io/transaction/${completionTxHash})`,
+    ];
+  }
   
   const embed: DiscordEmbed = {
     color: color,
