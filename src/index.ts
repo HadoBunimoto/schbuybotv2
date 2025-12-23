@@ -9,7 +9,7 @@ const CONFIG = {
   DEXHUNTER_PARTNER_ID: process.env.DEXHUNTER_PARTNER_ID || 'snekcash61646472317138797671387a377634716c6572616b657a307465396b336e6c6137356a7666736a387a6465726c373276663963393972717275737938653261707737756173687a61677a6b7170613567787373353375303779677439367773387376747a33676dda39a3ee5e6b4b0d3255bfef95601890afd80709',
   
   // Discord
-  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1451969354961785044/CnK5m9H4sAxrPWyxjHcjC80mQtuVqVnALXQlpczU9EJhss5eHF_HrwXb7XrFVc43bXdZ',
+  DISCORD_WEBHOOK_URL: process.env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1453131545530335466/I-4_AiGzaNtnqvctzmxwVsqShgypuu2Ksa2z1RojgJmlkPbZGXdpL3BB9crd6WK8YRMc',
   
   // Token IDs
   SCH_TOKEN_ID: '7ad3a27163e497f42d52890e78007d7562899a899e39e5f4dcb1589a536e656b2043617368',
@@ -215,7 +215,7 @@ async function createBuyEmbed(
   
   // Build description with bold title at top
   const descriptionLines = [
-    `**🐍 New Snek Cash Buy Detected**`,
+    `**New Snek Cash Buy Detected**`,
     ``,
     `**${spentLabel}:** ${displayAmount.toFixed(2)} ₳`,
     `**Snek Cash Amount:** ${formatNumberWithCommas(schReceived)} $SCH`,
