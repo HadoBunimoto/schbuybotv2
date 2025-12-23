@@ -46,6 +46,13 @@ interface DexHunterOrder {
   output_amount?: number;
   token_in?: string;
   token_out?: string;
+  // DexHunter API may also use these field names
+  total_input?: number;
+  total_output?: number;
+  amount_token_in?: number;
+  amount_token_out?: number;
+  lovelace_in?: number;
+  lovelace_out?: number;
 }
 
 interface OrdersResponse {
@@ -167,15 +174,37 @@ async function createBuyEmbed(
   // Debug log to see actual order structure
   console.log('Order data:', JSON.stringify(order, null, 2));
   
-  // Try multiple possible field names for amounts
-  const rawAmountIn = order.amount_in || order.input_amount || 0;
-  const rawAmountOut = order.actual_out_amount || order.expected_out_amount || order.output_amount || 0;
+  // Try multiple possible field names for amounts based on DexHunter API
+  // The API may use total_input/total_output from swap responses
+  const rawAmountIn = order.amount_in || order.input_amount || order.total_input || order.amount_token_in || order.lovelace_in || 0;
+  const rawAmountOut = order.actual_out_amount || order.expected_out_amount || order.output_amount || order.total_output || order.amount_token_out || 0;
   
-  const amountIn = pairType === 'ADA' 
-    ? rawAmountIn / Math.pow(10, CONFIG.ADA_DECIMALS)
-    : rawAmountIn / Math.pow(10, CONFIG.NIGHT_DECIMALS);
+  console.log(`Raw amounts - In: ${rawAmountIn}, Out: ${rawAmountOut}, Pair: ${pairType}`);
+  
+  // Calculate amounts based on pair type
+  let amountSpent: number;
+  let spentLabel: string;
+  
+  if (pairType === 'ADA') {
+    amountSpent = rawAmountIn / Math.pow(10, CONFIG.ADA_DECIMALS);
+    spentLabel = 'ADA Amount';
+  } else {
+    // For NIGHT buys, convert NIGHT to ADA equivalent for display
+    const nightAmount = rawAmountIn / Math.pow(10, CONFIG.NIGHT_DECIMALS);
+    // Show NIGHT amount but also calculate ADA equivalent if needed
+    amountSpent = nightAmount;
+    spentLabel = 'NIGHT Amount';
+  }
   
   const schReceived = rawAmountOut / Math.pow(10, CONFIG.SCH_DECIMALS);
+  
+  // If amounts are still 0, try to estimate from SCH received and price
+  let displayAmount = amountSpent;
+  if (displayAmount === 0 && schReceived > 0 && schPriceInAda > 0) {
+    // Estimate ADA spent based on SCH received and price
+    displayAmount = schReceived * schPriceInAda;
+    spentLabel = 'ADA Amount (est.)';
+  }
   
   // Calculate market cap (SCH supply * price in ADA)
   const SCH_SUPPLY = 1_000_000_000; // 1 billion SCH
@@ -184,9 +213,11 @@ async function createBuyEmbed(
   // Cyan-green color matching the logo
   const color = 0x3EEBBE;
   
-  // Build description matching the exact screenshot layout
+  // Build description with bold title at top
   const descriptionLines = [
-    `**ADA Amount:** ${amountIn.toFixed(2)} ₳`,
+    `**🐍 New Snek Cash Buy Detected**`,
+    ``,
+    `**${spentLabel}:** ${displayAmount.toFixed(2)} ₳`,
     `**Snek Cash Amount:** ${formatNumberWithCommas(schReceived)} $SCH`,
     `**Token Price:** ${schPriceInAda > 0 ? schPriceInAda.toFixed(8) : 'N/A'} ₳`,
     `**Market Cap:** ${marketCapAda > 0 ? formatNumberWithCommas(Math.round(marketCapAda)) : 'N/A'} ₳`,
